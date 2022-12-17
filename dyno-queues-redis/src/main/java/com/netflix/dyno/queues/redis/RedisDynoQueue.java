@@ -194,7 +194,7 @@ public class RedisDynoQueue implements DynoQueue {
                 return messages;
             });
 
-            return messages.stream().map(msg -> msg.getId()).collect(Collectors.toList());
+            return messages.stream().map(Message::getId).collect(Collectors.toList());
 
         } finally {
             sw.stop();
@@ -298,25 +298,23 @@ public class RedisDynoQueue implements DynoQueue {
     }
 
     /**
-     * Takes a set of message IDs, 'message_ids', and returns a list of Message objects
-     * corresponding to 'message_ids'. Read only, does not make any updates.
+     * Takes a set of message IDs, 'messageIds', and returns a list of Message objects
+     * corresponding to 'messageIds'. Read only, does not make any updates.
      *
-     * @param message_ids Set of message IDs to peek.
-     * @return a list of Message objects corresponding to 'message_ids'
+     * @param messageIds Set of message IDs to peek.
+     * @return a list of Message objects corresponding to 'messageIds'
      *
      */
-    private List<Message> doPeekBodyHelper(Set<String> message_ids) {
-        List<Message> msgs = execute("peek", messageStoreKey, () -> {
-            List<Message> messages = new LinkedList<Message>();
-            for (String id : message_ids) {
+    private List<Message> doPeekBodyHelper(Set<String> messageIds) {
+        return execute("peek", messageStoreKey, () -> {
+            List<Message> messages = new LinkedList<>();
+            for (String id : messageIds) {
                 String json = nonQuorumConn.hget(messageStoreKey, id);
                 Message message = om.readValue(json, Message.class);
                 messages.add(message);
             }
             return messages;
         });
-
-        return msgs;
     }
 
     @Override
@@ -424,8 +422,7 @@ public class RedisDynoQueue implements DynoQueue {
                     return null;
                 }
 
-                Message msg = om.readValue(json, Message.class);
-                return msg;
+                return om.readValue(json, Message.class);
             });
         } finally {
             sw.stop();
@@ -510,7 +507,6 @@ public class RedisDynoQueue implements DynoQueue {
      *
      * @param prefetchCounter Number of message IDs to attempt prefetch.
      * @param prefetchedIdQueue Concurrent Linked Queue where message IDs are stored.
-     * @param peekFunction Function to call to peek into the queue.
      */
     private int doPrefetchIdsHelper(String queueShardName, AtomicInteger prefetchCounter,
                                      ConcurrentLinkedQueue<String> prefetchedIdQueue, double prefetchFromTs) {
@@ -664,7 +660,7 @@ public class RedisDynoQueue implements DynoQueue {
                 String queueShard = getQueueShardKey(queueName, shard);
                 Double score = quorumConn.zscore(queueShard, messageId);
                 if (score != null) {
-                    double priorityd = message.getPriority() / 100;
+                    double priorityd = message.getPriority() / 100.0;
                     double newScore = Long.valueOf(clock.millis() + timeout).doubleValue() + priorityd;
                     ZAddParams params = ZAddParams.zAddParams().xx();
                     quorumConn.zadd(queueShard, newScore, messageId, params);
